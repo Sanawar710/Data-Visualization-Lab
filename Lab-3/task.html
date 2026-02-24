@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>u2023331 Lab-3 Task</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+    <h2>Improved D3 Bar Chart</h2>
+
+    <script>
+
+        const data = [30, 80, 45, 60, 20];
+
+        // --- SVG size (Task 1) ---
+        const width = 500;
+        const height = 300;   // changed to 300
+        const padding = 40;   // bottom padding so bars grow from base line
+
+        const svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // --- Scales for clean layout ---
+        const xScale = d3.scaleBand()
+            .domain(d3.range(data.length))
+            .range([padding, width - padding])
+            .padding(0.3);   // increases spacing between bars
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(data)])
+            .range([height - padding, padding]);
+
+        // --- Value-based color function (Task 2) ---
+        const valueColor = d => {
+            if (d > 60) return "red";
+            if (d >= 40) return "blue";
+            return "green";
+        };
+
+        // --- Index-based color scale (Task 3) ---
+        const indexColor = d3.scaleOrdinal(d3.schemeTableau10);
+
+        // --- Draw bars ---
+        svg.selectAll("rect")
+            .data(data)
+            .join("rect")
+            .attr("x", (d, i) => xScale(i))
+            .attr("y", d => yScale(d))
+            .attr("width", xScale.bandwidth())   // wider bars, no overlap
+            .attr("height", d => height - padding - yScale(d))
+
+            // 🔹 Choose ONE of the following:
+
+            // Part 2 → value-based coloring
+            .attr("fill", d => valueColor(d))
+
+            // Part 3 → index-based coloring (overrides previous)
+           //.attr("fill", (d, i) => indexColor(i));
+
+    </script>
+
+</body>
+
+</html>
