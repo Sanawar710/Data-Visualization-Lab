@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>u2023331 Lab-4 and Lab-5 Tasks</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="intro">
+        <p>Submitted by: Muhammad Sanawar</p>
+        <p>Registration Number: 2023331</p>
+        <p>Dataset Link: https://www.kaggle.com/datasets/emanfatima2/student-academic-performance-analysis-dataset</p>
+    </div>
+
+    <div id="preview" class="preview">
+        <p class="highlight-text">Dataset Overview </p>
+        <p class="section-desc">Below is a quick glimpse of the raw dataset. The first five rows are displayed to help you verify the format and contents after loading.</p>
+        <script>
+            d3.csv("./student_academic_performance.csv").then(function (data) {
+                const head = data.slice(0, 5);
+
+                d3.select("#preview")
+                    .selectAll("p")
+                    .data(head)
+                    .enter()
+                    .append("p")
+                    .text(d => JSON.stringify(d));
+            });
+        </script>
+    </div>
+
+    <div class="preprocessing">
+        <p class="highlight-text">Data Preprocessing</p>
+        <p class="section-desc">The following steps describe how the data was cleaned and transformed to prepare it for visualization. This includes filtering, type conversion, and new variable creation.</p>
+        <div class="explanation">
+            <h3>Preprocessing Steps:</h3>
+            <ul>
+                <li><strong>Removed rows with missing test scores:</strong> Filtered out rows where Math Score, Reading
+                    Score, or Writing Score were null/empty.</li>
+                <li><strong>Filled numeric gaps:</strong> Replaced missing values in "Study Time per Week" and "Daily
+                    Sleep Duration" with the median value.</li>
+                <li><strong>Handled categorical data:</strong> Ensured proper formatting of categorical columns like
+                    Gender, Race/Ethnicity, and School Type.</li>
+                <li><strong>Derived column:</strong> Created "Average Score" by calculating the mean of Math, Reading,
+                    and Writing scores.</li>
+            </ul>
+        </div>
+        <div class="stats">
+            <p><strong>Original dataset:</strong> <span id="originalCount">Loading...</span> rows</p>
+            <p><strong>After preprocessing:</strong> <span id="cleanCount">Loading...</span> rows</p>
+            <p><strong>Removed:</strong> <span id="removedCount">Loading...</span> rows</p>
+        </div>
+        <div class="charts">
+            <p class="section-desc">Interactive charts provide insight into score distributions and relationships within the cleaned dataset. Hover over elements to see tooltips with details.</p>
+            <div id="barChart" class="chart"></div>
+            <div id="scatterPlot" class="chart"></div>
+            <div id="pieChart" class="chart"></div>
+        </div>
+        <div class="data-table">
+            <p class="table-title">Sample of Cleaned Data (First 5 rows)</p>
+            <table id="cleanDataTable">
+                <thead>
+                    <tr>
+                        <th>Student ID</th>
+                        <th>Gender</th>
+                        <th>Math Score</th>
+                        <th>Reading Score</th>
+                        <th>Writing Score</th>
+                        <th>Average Score</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <script>
+            // tooltip div for charts
+            const tooltip = d3.select("body")
+                .append("div")
+                .attr("class", "tooltip")
+                .style("visibility", "hidden");
+
+            d3.csv("./student_academic_performance.csv").then(function (rawData) {
+                const originalCount = rawData.length;
+
+                // Filter: Remove rows with missing test scores
+                let cleanData = rawData.filter(d =>
+                    d["Math Score"] != null && d["Math Score"] !== "" &&
+                    d["Reading Score"] != null && d["Reading Score"] !== "" &&
+                    d["Writing Score"] != null && d["Writing Score"] !== ""
+                );
+
+                // Convert scores to numbers
+                cleanData.forEach(d => {
+                    d["Math Score"] = +d["Math Score"];
+                    d["Reading Score"] = +d["Reading Score"];
+                    d["Writing Score"] = +d["Writing Score"];
+                });
+
+                // Fill missing numeric columns with median
+                const medianStudyTime = d3.median(cleanData.map(d => +d["Study Time per Week"]).filter(x => !isNaN(x)));
+                const medianSleep = d3.median(cleanData.map(d => +d["Daily Sleep Duration"]).filter(x => !isNaN(x)));
+
+                cleanData.forEach(d => {
+                    if (!d["Study Time per Week"] || d["Study Time per Week"] === "") {
+                        d["Study Time per Week"] = medianStudyTime;
+                    } else {
+                        d["Study Time per Week"] = +d["Study Time per Week"];
+                    }
+
+                    if (!d["Daily Sleep Duration"] || d["Daily Sleep Duration"] === "") {
+                        d["Daily Sleep Duration"] = medianSleep;
+                    } else {
+                        d["Daily Sleep Duration"] = +d["Daily Sleep Duration"];
+                    }
+                });
+
+                // Calculate average score as number
+                cleanData.forEach(d => {
+                    d["Average Score"] = +(((d["Math Score"] + d["Reading Score"] + d["Writing Score"]) / 3).toFixed(2));
+                });
+
+                // Update statistics
+                const removedCount = originalCount - cleanData.length;
+                d3.select("#originalCount").text(originalCount);
+                d3.select("#cleanCount").text(cleanData.length);
+                d3.select("#removedCount").text(removedCount);
+
+                // build charts
+                createBarChart(cleanData);
+                createScatterPlot(cleanData);
+                createPieChart(cleanData);
+
+                // Display first 5 rows in table
+                const sample = cleanData.slice(0, 5);
+                const rows = d3.select("#cleanDataTable tbody")
+                    .selectAll("tr")
+                    .data(sample)
+                    .enter()
+                    .append("tr");
+
+                rows.append("td").text(d => d["Student ID"]);
+                rows.append("td").text(d => d["Gender"]);
+                rows.append("td").text(d => d["Math Score"].toFixed(1));
+                rows.append("td").text(d => d["Reading Score"].toFixed(1));
+                rows.append("td").text(d => d["Writing Score"].toFixed(1));
+                rows.append("td").text(d => d["Average Score"]);
+            });
+
+            // chart helper functions
+            function createBarChart(data) {
+                const grouped = d3.rollup(data, v => d3.mean(v, d => d["Average Score"]), d => d.Gender);
+                const avgByGender = Array.from(grouped, ([gender, avg]) => ({ gender, avg }));
+
+                const margin = { top: 30, right: 30, bottom: 50, left: 60 };
+                const width = 500 - margin.left - margin.right;
+                const height = 300 - margin.top - margin.bottom;
+
+                const svg = d3.select("#barChart").append("svg")
+                    .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+                    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const x = d3.scaleBand()
+                    .domain(avgByGender.map(d => d.gender))
+                    .range([0, width])
+                    .padding(0.2);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(avgByGender, d => d.avg)])
+                    .nice()
+                    .range([height, 0]);
+
+                svg.append("g").call(d3.axisLeft(y));
+                svg.append("g")
+                    .attr("transform", `translate(0,${height})`)
+                    .call(d3.axisBottom(x));
+
+                // axis labels
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height + margin.bottom - 10)
+                    .attr("text-anchor", "middle")
+                    .text("Gender");
+
+                svg.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", -margin.left + 15)
+                    .attr("x", -height / 2)
+                    .attr("text-anchor", "middle")
+                    .text("Average Score");
+
+                svg.selectAll("rect")
+                    .data(avgByGender)
+                    .enter()
+                    .append("rect")
+                    .attr("x", d => x(d.gender))
+                    .attr("y", d => y(d.avg))
+                    .attr("width", x.bandwidth())
+                    .attr("height", d => height - y(d.avg))
+                    .attr("fill", "steelblue")
+                    .on("mouseover", function (event, d) {
+                        d3.select(this).attr("fill", "orange");
+                        tooltip.style("visibility", "visible")
+                            .text(d.gender + ": " + d.avg.toFixed(2));
+                    })
+                    .on("mousemove", function (event) {
+                        tooltip.style("top", (event.pageY - 10) + "px")
+                            .style("left", (event.pageX + 10) + "px");
+                    })
+                    .on("mouseout", function () {
+                        d3.select(this).attr("fill", "steelblue");
+                        tooltip.style("visibility", "hidden");
+                    })
+                    .transition()
+                    .duration(800)
+                    .attr("y", d => y(d.avg))
+                    .attr("height", d => height - y(d.avg));
+
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", -10)
+                    .attr("text-anchor", "middle")
+                    .text("Average Score by Gender");
+            }
+
+            function createScatterPlot(data) {
+                const margin = { top: 30, right: 30, bottom: 50, left: 60 };
+                const width = 500 - margin.left - margin.right;
+                const height = 300 - margin.top - margin.bottom;
+
+                const svg = d3.select("#scatterPlot").append("svg")
+                    .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+                    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const x = d3.scaleLinear()
+                    .domain(d3.extent(data, d => d["Study Time per Week"]))
+                    .nice()
+                    .range([0, width]);
+
+                const y = d3.scaleLinear()
+                    .domain(d3.extent(data, d => d["Average Score"]))
+                    .nice()
+                    .range([height, 0]);
+
+                svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
+                svg.append("g").call(d3.axisLeft(y));
+
+                // axis labels
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height + margin.bottom - 10)
+                    .attr("text-anchor", "middle")
+                    .text("Study Time per Week");
+
+                svg.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", -margin.left + 15)
+                    .attr("x", -height / 2)
+                    .attr("text-anchor", "middle")
+                    .text("Average Score");
+
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", -10)
+                    .attr("text-anchor", "middle")
+                    .text("Study Time vs Average Score");
+
+                svg.selectAll("circle")
+                    .data(data)
+                    .enter()
+                    .append("circle")
+                    .attr("cx", d => x(d["Study Time per Week"]))
+                    .attr("cy", d => y(d["Average Score"]))
+                    .attr("r", 4)
+                    .attr("fill", "teal")
+                    .on("mouseover", function (event, d) {
+                        d3.select(this).attr("r", 6);
+                        tooltip.style("visibility", "visible")
+                            .text(`ID:${d["Student ID"]} Avg:${d["Average Score"]}`);
+                    })
+                    .on("mousemove", function (event) {
+                        tooltip.style("top", (event.pageY - 10) + "px")
+                            .style("left", (event.pageX + 10) + "px");
+                    })
+                    .on("mouseout", function () {
+                        d3.select(this).attr("r", 4);
+                        tooltip.style("visibility", "hidden");
+                    });
+            }
+
+            function createPieChart(data) {
+                const genderCounts = d3.rollup(data, v => v.length, d => d.Gender);
+                const pieData = Array.from(genderCounts, ([gender, count]) => ({ gender, count }));
+
+                // base dimensions and scaled radius
+                const baseWidth = 200;
+                const radiusFactor = 0.6; // 60% of half-width
+                const radius = (baseWidth / 2) * radiusFactor;
+                // compute svg height to closely wrap circle plus space for title
+                const width = baseWidth;
+                const height = radius * 2 + 25;
+
+                const container = d3.select("#pieChart");
+                const svg = container.append("svg")
+                    .attr("viewBox", `0 0 ${width} ${height}`)
+                    .append("g")
+                    // center group vertically around circle, leaving room for title above
+                    .attr("transform", `translate(${width / 2},${radius + 20})`);
+
+                // chart title
+                svg.append("text")
+                    .attr("x", 0)
+                    .attr("y", -radius - 10 - 20) // additional offset because group moved down
+                    .attr("text-anchor", "middle")
+                    .text("Gender Distribution");
+
+                const color = d3.scaleOrdinal()
+                    .domain(pieData.map(d => d.gender))
+                    .range(d3.schemeCategory10);
+
+                const pie = d3.pie()
+                    .value(d => d.count);
+
+                const arc = d3.arc()
+                    .innerRadius(0)
+                    .outerRadius(radius);
+
+                const arcs = svg.selectAll("arc")
+                    .data(pie(pieData))
+                    .enter()
+                    .append("g");
+
+                arcs.append("path")
+                    .attr("d", arc)
+                    .attr("fill", d => color(d.data.gender))
+                    .on("mouseover", function (event, d) {
+                        d3.select(this).transition().duration(200).attr("transform", "scale(1.05)");
+                        tooltip.style("visibility", "visible")
+                            .text(d.data.gender + ": " + d.data.count);
+                    })
+                    .on("mousemove", function (event) {
+                        tooltip.style("top", (event.pageY - 10) + "px")
+                            .style("left", (event.pageX + 10) + "px");
+                    })
+                    .on("mouseout", function (event) {
+                        d3.select(this).transition().duration(200).attr("transform", "scale(1)");
+                        tooltip.style("visibility", "hidden");
+                    });
+
+                // legend below chart
+                const legend = container.append("div")
+                    .attr("class", "legend")
+                    .style("text-align", "center");
+
+                pieData.forEach(d => {
+                    const item = legend.append("div")
+                        .style("display", "inline-block")
+                        .style("margin", "0 10px");
+                    item.append("span")
+                        .style("display", "inline-block")
+                        .style("width", "12px")
+                        .style("height", "12px")
+                        .style("background-color", color(d.gender))
+                        .style("margin-right", "4px");
+                    item.append("span").text(d.gender);
+                });
+            }
+        </script>
+    </div>
+
+</body>
+
+</html>
